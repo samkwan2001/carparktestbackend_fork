@@ -1,7 +1,6 @@
 // const charger_IPV4 = "192.168.0.199";//<<<<<<<<<<
 // const charger_IPV4 = "192.168.137.7";//<<<<<<<<<<
 // const charger_IPV4 = "192.168.4.1";//<<<<<<<<<<
-const {EventSource} = require('eventsource')
 const express = require('express');
 const mongodb = require('mongodb');
 const {ObjectId} = require('mongodb');
@@ -11,7 +10,6 @@ const port = 7000;
 const cors = require("cors");
 var fs = require('fs');
 const { clearInterval } = require('timers');
-const { start } = require('repl');
 let predicted_moved_time=0;
 // app.use(cors());
 app.use(cors({
