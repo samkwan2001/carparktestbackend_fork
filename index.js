@@ -14,10 +14,10 @@ let predicted_moved_time=0;
 // app.use(cors());
 app.use(cors({
   origin: [
-    'https://carparktest3frontend.vercel.app/', // 換成你Vercel前端網址
+    'https://carparktest3frontend.vercel.app', // 換成你Vercel前端網址
     'http://localhost:3000' // 測試用
   ],
-  methods:['GET','POST'],
+  // methods:['GET','POST'],
   credentials: true
 }));
 // 使用JSON中間件
