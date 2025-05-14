@@ -17,6 +17,7 @@ app.use(cors({
     'https://carparktest3frontend.vercel.app/', // 換成你Vercel前端網址
     'http://localhost:3000' // 測試用
   ],
+  methods:['GET','POST'],
   credentials: true
 }));
 // 使用JSON中間件
