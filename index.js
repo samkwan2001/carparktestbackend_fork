@@ -1077,18 +1077,19 @@ async function call_charger_move_to(spot) {
   // console.log(`http://${charger_IPV4}/control/${command}`);
 
   // const result = await fetch(`http://${charger_IPV4}/control/${command}`);
-  console.log(result);
+  // console.log(result);
   clearInterval(charger_moving_interval);
   predicted_moved_time = Date.now() + (32 * 1000);
   const isComplete_list=[];
   let fetch_count = 0;
+  let isComplete_start=Date.now();
   const check_charger_complete_move = async () => {
       // console.log(`Checking if charger has completed move: http://${charger_IPV4}/is_charger_complete_move`);
       fetch_count++;
       // const is_charger_complete_move = await fetch(`http://${charger_IPV4}/is_charger_complete_move`);
-      console.log(is_charger_complete_move.status)
-      isComplete_list.push(await (await is_charger_complete_move.blob()).text() === "1");
-      const isComplete = isComplete_list.some(a=>a);
+      // console.log(is_charger_complete_move.status)
+      // isComplete_list.push(await (await is_charger_complete_move.blob()).text() === "1");
+      const isComplete = (Date.now()-predicted_moved_time>0);//isComplete_list.some(a=>a);
       console.log([isComplete_list.length,isComplete,fetch_count]);
       if (isComplete) {
           clearInterval(charger_moving_interval);
