@@ -287,11 +287,11 @@ function send_to_index_loc(event,data){
     index_loc_res.write("data:" + data + "\n\n");
     success=true;
   }
-  else {
+  // else {
     // setTimeout(send_to_index_loc,10,(event,data));
     last_event_data["event"]=event;
     last_event_data["data"] =data;
-  }
+  // }
   console.log(`send_to_index_loc(${event},${data})==${success}`)
 };
 let index_loc_msg_rev_time=0;
