@@ -10,6 +10,7 @@ const port = 7000;
 const cors = require("cors");
 var fs = require('fs');
 const { clearInterval } = require('timers');
+// const { Promise } = require('mongoose');
 let predicted_moved_time=0;
 // app.use(cors());
 app.use(cors({
@@ -24,8 +25,8 @@ app.use(cors({
 app.use(express.json());
 
 // 資料庫連接資訊
-// const url = 'mongodb://localhost:27017/';
-const url = process.env.MONGODB_URI;
+const url = 'mongodb://localhost:27017/';
+// const url = process.env.MONGODB_URI;
 
 const dbName = 'carpark';
 const collectionName = 'carparkcollection';
@@ -42,6 +43,9 @@ const not_this_user = 4;
 let timer = setInterval(async () => {
   clearInterval(timer);
 }, 0);
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
 function millis_to_time_String(durationInMillis) {
 
   let millis = durationInMillis % 1000;
@@ -266,21 +270,44 @@ app.get("/admin_debug_fetch",async(req,res)=>{console.log("get /admin_debug_fetc
   
   res.send(JSON.stringify(results))
 })
-const msg_msgNtime=[]
-let msg_monitor_res=void 0;
-app.get("/msg/event", (req, res)=>{console.log(req.url);
+// const msg_msgNtime=[]
+let last_event_data={}
+let index_loc_res=void 0;
+app.get("/index_pub/event", (req, res)=>{console.log(req.url);
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
-  msg_monitor_res=res;
+  index_loc_res=res;
+  send_to_index_loc(last_event_data["event"],last_event_data["data"])
 })
-app.get("/msg", (req, res)=>{
-  console.log(req.url);
-  msg_msgNtime.push(req.url);
-  res.send("OK");
-  if(msg_monitor_res!==void 0&&!msg_monitor_res.destroyed){
-    msg_monitor_res.write("event: message\n");
-    msg_monitor_res.write("data:" + req.url + "\n\n");
+function send_to_index_loc(event,data){
+  let success=false;
+  if(index_loc_res!==void 0&&!index_loc_res.destroyed){
+    index_loc_res.write("event: "+event+"\n");
+    index_loc_res.write("data:" + data + "\n\n");
+    success=true;
+  }
+  else {
+    // setTimeout(send_to_index_loc,10,(event,data));
+    last_event_data["event"]=event;
+    last_event_data["data"] =data;
+  }
+  console.log(`send_to_index_loc(${event},${data})==${success}`)
+};
+let index_loc_msg_rev_time=0;
+let need_wait=0;
+app.get("/index_loc/push", (req, res)=>{const log=true;
+  console.log('get"/index_loc/push"')
+  if (log) console.log('app.get("/index_loc/push")' + req.url);
+  if (log) console.log('app.get("/index_loc/push")' + decodeURI(req.url));
+  // if(log)console.log(req);
+  var params = new URLSearchParams(req.url.split("?")[1]);
+  if (log) console.log(params);
+  if(params.get("need_wait")!==void 0){
+    need_wait=parseInt(params.get("need_wait"));
+    console.log({"need_wait":need_wait});
+    index_loc_msg_rev_time=Date.now();
+    console.log({"index_loc/push":{"index_loc_msg_rev_time":index_loc_msg_rev_time}});
   }
 })
 app.get("/admin_debug",(req,res)=>{console.log("get /admin_debug :"+req.url);
@@ -1020,7 +1047,7 @@ async function queue_shift(exception=void 0) {console.log("queue_shiftqqqqqqqqqq
   }
   last_queue_shift = Date.now()
   retry_reload_interval=setInterval(retry_reload,500)
-  await call_charger_move_to(user_who_need_to_charge["Parking Space Num"])  // TODO control fung's machine
+  await call_charger_move_to(user_who_need_to_charge["Parking Space Num"],_id=user_who_need_to_charge["_id"])  // TODO control fung's machine
   console.log("process returned to queue_shift")
   if (there_are_queuing) {
     const now = new Date(Date.now());
@@ -1040,38 +1067,7 @@ async function queue_shift(exception=void 0) {console.log("queue_shiftqqqqqqqqqq
     //if(log)console.log("abc"+queue_Interval)
   }
 }
-                                                      // async function call_charger_move_to(spot) {
-                                                      //   console.log(`Moving to spot ${spot}`);
-                                                      //   let command = "calibrate";
-                                                      //   if (spot != 0) command = `move?spot=${spot}`;
-                                                      //  console.log(`http://${charger_IPV4}/control/${command}`);
-                                                      //  const result = await fetch(`http://${charger_IPV4}/control/${command}`);
-                                                      //   console.log(result);
-                                                      //   clearInterval(charger_moving_interval);
-                                                      //   predicted_moved_time=Date.now()+(32*1000);
-                                                      //   const check_charger_complete_move = async()=>{
-                                                      //     clearInterval(charger_moving_interval);
-                                                      //    console.log((`http://${charger_IPV4}/is_charger_complete_move`));
-                                                      //    const is_charger_complete_move = await fetch(`http://${charger_IPV4}/is_charger_complete_move`);
-                                                      //     if (await(await is_charger_complete_move.blob()).text()=="0")charger_moving_interval=setInterval(check_charger_complete_move,1000);
-                                                      //     else{
-                                                      //       //goto MARK
-                                                      //     }
-                                                      //   }
-                                                      //   charger_moving_interval=setInterval(check_charger_complete_move,Date.now()-predicted_moved_time);
-                                                      //   console.log(`Moved to spot ${spot}`);//MARK
-                                                      //   // finish await call_charger_move_to
-                                                      // }
-
-
-
-
-
-
-// void 0;
-
-
-async function call_charger_move_to(spot) {
+async function call_charger_move_to(spot,_id = void 0) {//added ,_id = void 0
   console.log(`Moving to spot ${spot}`);
   let command = "calibrate";
   if (spot != 0) command = `move?spot=${spot}`;
@@ -1079,8 +1075,35 @@ async function call_charger_move_to(spot) {
 
   // const result = await fetch(`http://${charger_IPV4}/control/${command}`);
   // console.log(result);
+  const index_loc_msg_vaild_time=Date.now();
+  send_to_index_loc("call_charger_move_to",spot);
   clearInterval(charger_moving_interval);
-  predicted_moved_time = Date.now() + (32 * 1000);
+  // clearTimeout(charger_moving_interval);
+  // let need_wait=0;
+  // if(spot==0)need_wait=0;//need_wait = (32 * 1000);
+  // else need_wait = parseInt(await(await(await fetch(`http://${charger_IPV4}/how_long`)).blob()).text());
+  // else 
+  await new Promise((resolve) => {
+    charger_moving_interval = setInterval(async () => {
+      const completed = index_loc_msg_vaild_time<index_loc_msg_rev_time;
+      if (completed) {
+          resolve(); // 在完成後解析 Promise
+      }else console.log({"completed":{"index_loc_msg_rev_time":index_loc_msg_rev_time}});
+    }, 2000);
+  });
+  console.log("need_wait");
+  console.log(need_wait);
+  console.log(millis_to_time_String(need_wait));
+  predicted_moved_time = Date.now()+(isNaN(need_wait)?0:need_wait);
+  console.log(Date.now());
+  console.log(millis_to_time_String(Date.now()));
+  console.log(predicted_moved_time);
+  console.log(millis_to_time_String(predicted_moved_time));
+  // last_queue_shift=Date.now();
+  if(_id!==void 0)reload_all_client(_id=_id)//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+  console.log("sleeping");
+  await sleep(need_wait);
+  console.log("sleeped-----------------------------------------------------------------------------------------------------------------------");
   const isComplete_list=[];
   let fetch_count = 0;
   let isComplete_start=Date.now();
@@ -1088,9 +1111,11 @@ async function call_charger_move_to(spot) {
       // console.log(`Checking if charger has completed move: http://${charger_IPV4}/is_charger_complete_move`);
       fetch_count++;
       // const is_charger_complete_move = await fetch(`http://${charger_IPV4}/is_charger_complete_move`);
+      // if(charger_moving_interval.destroyed)return;
       // console.log(is_charger_complete_move.status)
       // isComplete_list.push(await (await is_charger_complete_move.blob()).text() === "1");
-      const isComplete = (Date.now()-predicted_moved_time>0);//isComplete_list.some(a=>a);
+      // const isComplete = isComplete_list.some(a=>a);
+      const isComplete = (Date.now()-predicted_moved_time>0);
       console.log([isComplete_list.length,isComplete,fetch_count]);
       if (isComplete) {
           clearInterval(charger_moving_interval);
@@ -1109,34 +1134,18 @@ async function call_charger_move_to(spot) {
             predicted_moved_time = Date.now() + (15 * 1000);
       }, 2000);
   });
+  
+  // return new Promise(async(resolve) => {
+  //   let completed=false;
+  //   while(!completed){
+  //     completed = await check_charger_complete_move();
+  //     if (completed) {
+  //       resolve(); // 在完成後解析 Promise
+  //     }else if(predicted_moved_time<Date.now())
+  //       predicted_moved_time = Date.now() + (15 * 1000);
+  //   }
+  // });
 }
-
-// // 使用範例
-// async function moveCharger() {
-//   await call_charger_move_to(1); // 等待充電器移動完成
-//   console.log('Charger move operation completed.');
-// }
-
-
-// let msg_req_interval=()=>{};
-// async function msg_req(){
-//   clearInterval(msg_req_interval);
-  // console.log((`http://${charger_IPV4}/Serial/monitor?host=192.168.0.196:7000`));
-  // const result = await fetch(`http://${charger_IPV4}/Serial/monitor?host=192.168.0.196:7000`);
-//   // console.log(result);
-// }
-// msg_req_interval=setInterval(msg_req, 1000);
-
-                  // var Serial_Monitir = new EventSource(`http://${charger_IPV4}/events`);
-                  // Serial_Monitir.addEventListener('msg', function(e) {
-                  //   console.log(e.data);
-                  //   if(!msg_monitor_res.destroyed)msg_monitor_res.write(e.data);
-                  // })
-                  // Serial_Monitir.addEventListener('error', function() {
-                  //   console.log('ERROR!');
-                  //   Serial_Monitir.close()
-                  // });
-
 // 啟動服務器
 async function startServer() {
   await connectToDatabase();
