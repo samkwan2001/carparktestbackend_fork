@@ -309,6 +309,7 @@ app.get("/index_loc/push", (req, res)=>{const log=true;
     index_loc_msg_rev_time=Date.now();
     console.log({"index_loc/push":{"index_loc_msg_rev_time":index_loc_msg_rev_time}});
   }
+  res.send("OK");
 })
 app.get("/admin_debug",(req,res)=>{console.log("get /admin_debug :"+req.url);
   res.send(`<!--html-->
