@@ -10,13 +10,16 @@ const port = 7000;
 const cors = require("cors");
 var fs = require('fs');
 const { clearInterval } = require('timers');
+const { set } = require('mongoose');
 // const { Promise } = require('mongoose');
 let predicted_moved_time=0;
 // app.use(cors());
 app.use(cors({
   origin: [
     'https://carparktest3frontend.vercel.app', // 換成你Vercel前端網址
-    'http://localhost:3000' // 測試用
+    'http://localhost:3000', // 測試用
+    'http://192.168.31.18:3000', // 測試用
+    'http://192.168.137.1:3000', // 測試用
   ],
   // methods:['GET','POST'],
   credentials: true
@@ -25,8 +28,8 @@ app.use(cors({
 app.use(express.json());
 
 // 資料庫連接資訊
-// const url = 'mongodb://localhost:27017/';
-const url = process.env.MONGODB_URI;
+const url = 'mongodb://localhost:27017/';
+// const url = process.env.MONGODB_URI;
 
 const dbName = 'carpark';
 const collectionName = 'carparkcollection';
@@ -43,6 +46,13 @@ const not_this_user = 4;
 let timer = setInterval(async () => {
   clearInterval(timer);
 }, 0);
+function clearIntervals(Intervals=[]){
+  for(let i = 0;i<Intervals.length;i++){
+    if(!Intervals[i].destroyed){
+      clearInterval(Intervals[i]);
+    }
+  }
+};
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -94,26 +104,9 @@ function reload_all_client(exception=void 0,_id=void 0) {
     // console.log(client)
     if(!client["res"].destroyed){
       // console.log(client["_id"])
-      console.log("reload client"+client["async_id_symbol"])
+      console.log("reload client"+client["async_id_symbol"],client["_id"])
       if(client["_id"]=="undefined")return;
       if(_id!=void 0&&client["_id"]!=_id)return;
-      // const limit = 1
-      // let sort = { "start time": -1 }
-      // const crr_cursor = collection.find(
-      //   {
-      //     "_id": new ObjectId(client["_id"]),
-      //   }, { sort, limit }
-      // )
-      // const crr_rows = await crr_cursor.toArray()
-      // console.log("crr_rows")
-      // console.log(crr_rows)
-      // const crr_user = crr_rows[0]
-      // console.log("crr");
-      // console.log(crr_user)
-      
-      
-      
-      
       client["res"].write("event: message\n");
       client["res"].write("data:" + "reload" + "\n\n");
       // client["res"].write("exception:" + exception + "\n\n");
@@ -121,6 +114,26 @@ function reload_all_client(exception=void 0,_id=void 0) {
     }
   });
   console.log("reloaded "+count);
+  reload_admin()
+  return count;
+}
+function send_to_client(event,data,_id=void 0) {
+  console.log("rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr");
+  let count=0;
+  clients.forEach(async(client) => {
+    // console.log(client)
+    if(!client["res"].destroyed){
+      // console.log(client["_id"])
+      console.log("sent client",client["async_id_symbol"],client["_id"],":", {event:event},{data:data})
+      if(client["_id"]=="undefined")return;
+      if(_id!=void 0&&client["_id"]!=_id)return;
+      client["res"].write(`event: ${event}\n`);
+      client["res"].write(`data: ${data}\n\n`);
+      // client["res"].write("exception:" + exception + "\n\n");
+      count++;
+    }
+  });
+  console.log("sent "+count);
   reload_admin()
   return count;
 }
@@ -922,7 +935,7 @@ app.post("/selected", async (req, resp) => {const log = true;
     resp.send(result);
     if (timer._destroyed) {
       queue_shift();
-    }else reload_all_client()
+    }else send_to_client("message","fetchData")
   }
   catch {
     err => {
@@ -987,7 +1000,6 @@ app.post("/cancal", async (req, resp) => {const log = false;
   queue_shift();
 });
 
-let charger_moving_interval=setInterval(()=>{},10);
 // 開始充電的路由（更新 start time）
 async function queue_shift(exception=void 0) {console.log("queue_shiftqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq");
   const log=false;
@@ -1042,7 +1054,7 @@ async function queue_shift(exception=void 0) {console.log("queue_shiftqqqqqqqqqq
   let retry_reload_interval=setInterval(()=>{},10)
   clearInterval(retry_reload_interval);
   let retry_reload=()=>{
-    reloaded_client=reload_all_client(exception);
+    reloaded_client=send_to_client("message","fetchData");
     if(Date.now() - last_queue_shift > 1)
       clearInterval(retry_reload_interval);
   }
@@ -1063,11 +1075,14 @@ async function queue_shift(exception=void 0) {console.log("queue_shiftqqqqqqqqqq
     );
     /*if(log)*/console.log(result)
     console.log(user_who_need_to_charge)
-    reload_all_client(_id=String(user_who_need_to_charge["_id"]))
+    // reload_all_client(_id=String(user_who_need_to_charge["_id"]))
+    send_to_client("message","fetchData",_id=String(user_who_need_to_charge["_id"]))
     timer = setInterval(queue_shift, queue_Interval)
     //if(log)console.log("abc"+queue_Interval)
   }
 }
+
+let charger_moving_intervals=[setInterval(()=>{},10)]
 async function call_charger_move_to(spot,_id = void 0) {//added ,_id = void 0
   console.log(`Moving to spot ${spot}`);
   let command = "calibrate";
@@ -1078,19 +1093,19 @@ async function call_charger_move_to(spot,_id = void 0) {//added ,_id = void 0
   // console.log(result);
   const index_loc_msg_vaild_time=Date.now();
   send_to_index_loc("call_charger_move_to",spot);
-  clearInterval(charger_moving_interval);
+  clearIntervals(charger_moving_intervals);
   // clearTimeout(charger_moving_interval);
   // let need_wait=0;
   // if(spot==0)need_wait=0;//need_wait = (32 * 1000);
   // else need_wait = parseInt(await(await(await fetch(`http://${charger_IPV4}/how_long`)).blob()).text());
   // else 
   await new Promise((resolve) => {
-    charger_moving_interval = setInterval(async () => {
+    charger_moving_intervals.push(setInterval(async () => {
       const completed = index_loc_msg_vaild_time<index_loc_msg_rev_time;
       if (completed) {
           resolve(); // 在完成後解析 Promise
       }else console.log({"completed":{"index_loc_msg_rev_time":index_loc_msg_rev_time}});
-    }, 2000);
+    }, 2000));
   });
   console.log("need_wait");
   console.log(need_wait);
@@ -1101,7 +1116,7 @@ async function call_charger_move_to(spot,_id = void 0) {//added ,_id = void 0
   console.log(predicted_moved_time);
   console.log(millis_to_time_String(predicted_moved_time));
   // last_queue_shift=Date.now();
-  if(_id!==void 0)reload_all_client(_id=_id)//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+  if(_id!==void 0)send_to_client("message","fetchData",_id=_id)//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
   console.log("sleeping");
   await sleep(need_wait);
   console.log("sleeped-----------------------------------------------------------------------------------------------------------------------");
@@ -1119,7 +1134,7 @@ async function call_charger_move_to(spot,_id = void 0) {//added ,_id = void 0
       const isComplete = (Date.now()-predicted_moved_time>0);
       console.log([isComplete_list.length,isComplete,fetch_count]);
       if (isComplete) {
-          clearInterval(charger_moving_interval);
+          clearIntervals(charger_moving_intervals);
           console.log(`Charger has completed the move to spot ${spot}`);
           return true; // 返回完成狀態
       }
@@ -1127,13 +1142,13 @@ async function call_charger_move_to(spot,_id = void 0) {//added ,_id = void 0
   }
 
   return new Promise((resolve) => {
-      charger_moving_interval = setInterval(async () => {
+      charger_moving_intervals.push(setInterval(async () => {
           const completed = await check_charger_complete_move();
           if (completed) {
               resolve(); // 在完成後解析 Promise
           }else if(predicted_moved_time<Date.now())
             predicted_moved_time = Date.now() + (15 * 1000);
-      }, 2000);
+      }, 2000));
   });
   
   // return new Promise(async(resolve) => {
