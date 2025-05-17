@@ -28,8 +28,8 @@ app.use(cors({
 app.use(express.json());
 
 // 資料庫連接資訊
-const url = 'mongodb://localhost:27017/';
-// const url = process.env.MONGODB_URI;
+// const url = 'mongodb://localhost:27017/';
+const url = process.env.MONGODB_URI;
 
 const dbName = 'carpark';
 const collectionName = 'carparkcollection';
